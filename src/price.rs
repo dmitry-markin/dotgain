@@ -15,13 +15,15 @@ pub struct PriceClient {
 }
 
 impl PriceClient {
+    /// Create new instance.
     pub fn new() -> Self {
         Self {
             client: Client::new(),
         }
     }
 
-    pub fn price(self, symbol: &str, datetime: DateTime<Utc>) -> Result<f64> {
+    /// Request symbol price.
+    pub fn price(&mut self, symbol: &str, datetime: DateTime<Utc>) -> Result<f64> {
         // Get UNIX timestamp in milliseconds.
         let time_ms = datetime.timestamp() * 1000;
 

@@ -1,14 +1,11 @@
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, Result};
 use chrono::{Days, NaiveDate, NaiveTime};
 use clap::Parser;
+use dotgain::time::date_from_string;
 use rand::{
     distributions::{Distribution, Uniform},
     rngs::ThreadRng,
 };
-
-fn date_from_string(date: &str) -> Result<NaiveDate> {
-    Ok(NaiveDate::parse_from_str(date, "%Y-%m-%d").context("invalid date")?)
-}
 
 /// Create mock staking report for smoke testing.
 #[derive(Parser, Debug)]

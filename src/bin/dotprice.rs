@@ -19,7 +19,7 @@ struct Args {
 
 fn main() -> Result<()> {
     let args = Args::parse();
-    let client = PriceClient::new();
+    let mut client = PriceClient::new();
     let datetime = datetime_from_utc_string(&args.date)?;
     let price = client.price(&args.convert, datetime)?;
 

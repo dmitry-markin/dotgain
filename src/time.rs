@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use chrono::{DateTime, NaiveDate, NaiveDateTime, TimeZone, Utc};
 
 /// Convert UTC date time string into `DateTime`.
@@ -15,5 +15,10 @@ pub fn datetime_from_utc_string(datetime: &str) -> Result<DateTime<Utc>> {
             .expect("zero H, M, S are valid");
         return Ok(Utc.from_utc_datetime(&naive_datetime));
     }
-    Err(anyhow!("invalid date supplied: {datetime}"))
+    Err(anyhow!("invalid date: {datetime}"))
+}
+
+/// Convert string representation of date into `NaiveDate`.
+pub fn date_from_string(date: &str) -> Result<NaiveDate> {
+    Ok(NaiveDate::parse_from_str(date, "%Y-%m-%d").context("invalid date")?)
 }
