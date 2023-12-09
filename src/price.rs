@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Context, Result};
-use chrono::NaiveDateTime;
+use chrono::{DateTime, NaiveDateTime, Utc};
 use reqwest::{
     header::{HeaderMap, HeaderValue},
     StatusCode,
@@ -8,8 +8,11 @@ use reqwest::{
 const BASE_URL: &str = "https://api.binance.com";
 const KLINE_FIELDS_NUM: usize = 12;
 
-/// Get symbol price at `time_ms` Unix time.
-pub fn price(symbol: &str, time_ms: i64) -> Result<f64> {
+/// Get symbol price at `datetime``.
+pub fn price(symbol: &str, datetime: DateTime<Utc>) -> Result<f64> {
+    // Get UNIX timestamp in milliseconds.
+    let time_ms = datetime.timestamp() * 1000;
+
     // Time needs to be rounded down to the nearest minute,
     // otherwise we'll get the value for the next minute.
     let start_time_ms = time_ms / 60000 * 60000;
@@ -85,9 +88,9 @@ fn extract_price_from_payload(
         .ok_or(anyhow!("timestamp entry is not a number"))?;
     if returned_time_ms != start_time_ms {
         let returned = NaiveDateTime::from_timestamp_millis(returned_time_ms)
-            .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string());
+            .map(|dt| dt.format("%Y-%m-%d %H:%M:%S UTC").to_string());
         let requested = NaiveDateTime::from_timestamp_millis(start_time_ms)
-            .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string());
+            .map(|dt| dt.format("%Y-%m-%d %H:%M:%S UTC").to_string());
 
         return match (returned, requested) {
             (Some(returned), Some(requested)) => Err(anyhow!(
