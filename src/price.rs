@@ -5,6 +5,7 @@ use reqwest::{
     header::{HeaderMap, HeaderValue},
     StatusCode,
 };
+use rust_decimal::Decimal;
 
 const BASE_URL: &str = "https://api.binance.com";
 const KLINE_FIELDS_NUM: usize = 12;
@@ -23,7 +24,7 @@ impl PriceClient {
     }
 
     /// Request symbol price.
-    pub fn price(&mut self, symbol: &str, datetime: DateTime<Utc>) -> Result<f64> {
+    pub fn price(&mut self, symbol: &str, datetime: DateTime<Utc>) -> Result<Decimal> {
         // Get UNIX timestamp in milliseconds.
         let time_ms = datetime.timestamp() * 1000;
 
@@ -54,7 +55,7 @@ impl PriceClient {
 }
 
 /// Parse kline response body and extract close price.
-fn extract_price_from_body(body: &str, start_time_ms: i64) -> Result<f64> {
+fn extract_price_from_body(body: &str, start_time_ms: i64) -> Result<Decimal> {
     Ok(extract_price_from_payload(
         serde_json::from_str(body)?,
         start_time_ms,
@@ -84,7 +85,7 @@ fn extract_price_from_body(body: &str, start_time_ms: i64) -> Result<f64> {
 fn extract_price_from_payload(
     payload: Vec<Vec<serde_json::Value>>,
     start_time_ms: i64,
-) -> Result<f64> {
+) -> Result<Decimal> {
     if payload.is_empty() {
         return Err(anyhow!(
             "response must contain at least one price (kline) entry"
@@ -126,8 +127,7 @@ fn extract_price_from_payload(
     let price_str = payload[0][4]
         .as_str()
         .ok_or(anyhow!("price entry is not a string"))?;
-    let price = price_str
-        .parse::<f64>()
+    let price = Decimal::from_str_exact(price_str)
         .with_context(|| format!("cannot convert price entry \"{price_str}\" to number"))?;
     Ok(price)
 }

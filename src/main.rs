@@ -3,6 +3,7 @@ use chrono::{DateTime, Utc};
 use clap::Parser;
 use csv::Reader;
 use dotgain::{price::PriceClient, time::datetime_from_utc_string};
+use rust_decimal::Decimal;
 use std::{
     fs::File,
     io::{self, Write},
@@ -13,9 +14,10 @@ const DATE_COLUMN: &str = "Date";
 const VALUE_COLUMN: &str = "Value";
 const FIAT_GAIN_COLUMN: &str = "Fiat gain";
 const TOTAL_ROW: &str = "TOTAL";
+const AVG_PRICE_MIN_DECIMALS: u32 = 8;
 
 /// Create Polkadot staking tax report assuming every reward capital gain to be equal
-/// fiat value at the time of reward.
+/// the fiat value at the time of reward.
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
@@ -41,20 +43,20 @@ struct Args {
 
 struct InputEntry {
     datetime: String,
-    value: f64,
+    value: Decimal,
 }
 
 struct OutputEntry {
     datetime: String,
-    value: f64,
-    conversion: f64,
-    fiat_gain: f64,
+    value: Decimal,
+    conversion: Decimal,
+    fiat_gain: Decimal,
 }
 
 struct TotalsEntry {
-    total_value: f64,
-    avg_conversion: f64,
-    total_fiat_gain: f64,
+    total_value: Decimal,
+    avg_conversion: Decimal,
+    total_fiat_gain: Decimal,
 }
 
 fn main() -> Result<()> {
@@ -96,8 +98,7 @@ fn read_input(path: &Path) -> Result<Vec<InputEntry>> {
 
         let datetime = record[date_column].to_string();
         let value_str = &record[value_column];
-        let value = value_str
-            .parse::<f64>()
+        let value = Decimal::from_str_exact(value_str)
             .with_context(|| format!("cannot convert {value_str} to number"))?;
 
         entries.push(InputEntry { datetime, value });
@@ -164,9 +165,17 @@ fn print_progress(current: usize, total: usize) {
 }
 
 fn calculate_totals(report: &Vec<OutputEntry>) -> TotalsEntry {
-    let total_value = report.iter().fold(0f64, |acc, entry| acc + entry.value);
-    let total_fiat_gain = report.iter().fold(0f64, |acc, entry| acc + entry.fiat_gain);
-    let avg_conversion = total_fiat_gain / total_value;
+    let total_value = report
+        .iter()
+        .fold(Decimal::ZERO, |acc, entry| acc + entry.value);
+    let total_fiat_gain = report
+        .iter()
+        .fold(Decimal::ZERO, |acc, entry| acc + entry.fiat_gain);
+    let avg_conversion = if !total_value.is_zero() {
+        total_fiat_gain / total_value
+    } else {
+        Decimal::ZERO
+    };
 
     TotalsEntry {
         total_value,
@@ -190,25 +199,29 @@ fn write_output(
     )?;
 
     // Write report.
-    for OutputEntry {
-        datetime,
-        value,
-        conversion,
-        fiat_gain,
-    } in report
-    {
-        writeln!(&mut w, "{datetime},{value:.},{conversion:.},{fiat_gain:.}")?;
+    for entry in report {
+        writeln!(
+            &mut w,
+            "{},{},{},{}",
+            entry.datetime,
+            entry.value.normalize(),
+            entry.conversion.normalize(),
+            entry.fiat_gain.normalize()
+        )?;
     }
 
     // Write totals.
-    let TotalsEntry {
-        total_value,
-        avg_conversion,
-        total_fiat_gain,
-    } = totals;
+    let total_value = totals.total_value.normalize();
+    let total_fiat_gain = totals.total_fiat_gain.normalize();
+    // Decimal places estimation below is not quite correct, because we count only
+    // fractional decimal places.
+    // For this reason we always use at least `AVG_PRICE_MIN_DECIMALS` decimal places.
+    let max_decimals = std::cmp::max(total_value.scale(), total_fiat_gain.scale());
+    let max_decimals = std::cmp::max(max_decimals, AVG_PRICE_MIN_DECIMALS);
+    let avg_conversion = totals.avg_conversion.round_dp(max_decimals).normalize();
     writeln!(
         &mut w,
-        "{TOTAL_ROW},{total_value:.},{avg_conversion:.},{total_fiat_gain:.}"
+        "{TOTAL_ROW},{total_value},{avg_conversion},{total_fiat_gain}"
     )?;
 
     Ok(())

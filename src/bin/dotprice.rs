@@ -23,7 +23,7 @@ fn main() -> Result<()> {
     let datetime = datetime_from_utc_string(&args.date)?;
     let price = client.price(&args.convert, datetime)?;
 
-    println!("{price:.}");
+    println!("{price}");
 
     Ok(())
 }
