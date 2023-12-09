@@ -1,6 +1,7 @@
 use anyhow::{anyhow, Context, Result};
 use chrono::{DateTime, NaiveDateTime, Utc};
 use reqwest::{
+    blocking::Client,
     header::{HeaderMap, HeaderValue},
     StatusCode,
 };
@@ -8,33 +9,45 @@ use reqwest::{
 const BASE_URL: &str = "https://api.binance.com";
 const KLINE_FIELDS_NUM: usize = 12;
 
-/// Get symbol price at `datetime``.
-pub fn price(symbol: &str, datetime: DateTime<Utc>) -> Result<f64> {
-    // Get UNIX timestamp in milliseconds.
-    let time_ms = datetime.timestamp() * 1000;
+/// Binance Public API price client.
+pub struct PriceClient {
+    client: Client,
+}
 
-    // Time needs to be rounded down to the nearest minute,
-    // otherwise we'll get the value for the next minute.
-    let start_time_ms = time_ms / 60000 * 60000;
+impl PriceClient {
+    pub fn new() -> Self {
+        Self {
+            client: Client::new(),
+        }
+    }
 
-    let url = format!(
-        "{BASE_URL}/api/v3/klines?symbol={symbol}&interval=1m&startTime={start_time_ms}&limit=1"
-    );
+    pub fn price(self, symbol: &str, datetime: DateTime<Utc>) -> Result<f64> {
+        // Get UNIX timestamp in milliseconds.
+        let time_ms = datetime.timestamp() * 1000;
 
-    let res = reqwest::blocking::get(&url)?;
+        // Time needs to be rounded down to the nearest minute,
+        // otherwise we'll get the value for the next minute.
+        let start_time_ms = time_ms / 60000 * 60000;
 
-    let status = res.status();
-    let headers = res.headers().clone();
-    let body = match res.text() {
-        Ok(body) => body,
-        Err(e) => return Err(e).context(request_context_no_body(&url, status, &headers)),
-    };
+        let url = format!(
+            "{BASE_URL}/api/v3/klines?symbol={symbol}&interval=1m&startTime={start_time_ms}&limit=1"
+        );
 
-    if status.is_success() {
-        Ok(extract_price_from_body(&body, start_time_ms)
-            .with_context(|| request_context(&url, status, &headers, &body))?)
-    } else {
-        Err(anyhow!(request_context(&url, status, &headers, &body)))
+        let res = self.client.get(&url).send()?;
+
+        let status = res.status();
+        let headers = res.headers().clone();
+        let body = match res.text() {
+            Ok(body) => body,
+            Err(e) => return Err(e).context(request_context_no_body(&url, status, &headers)),
+        };
+
+        if status.is_success() {
+            Ok(extract_price_from_body(&body, start_time_ms)
+                .with_context(|| request_context(&url, status, &headers, &body))?)
+        } else {
+            Err(anyhow!(request_context(&url, status, &headers, &body)))
+        }
     }
 }
 
