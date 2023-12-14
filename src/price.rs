@@ -1,3 +1,4 @@
+use crate::time::IntoHuman;
 use anyhow::{anyhow, Context, Result};
 use chrono::{DateTime, NaiveDateTime, Utc};
 use reqwest::{
@@ -15,14 +16,15 @@ pub struct PriceClient {
     client: Client,
 }
 
-impl PriceClient {
-    /// Create new instance.
-    pub fn new() -> Self {
+impl Default for PriceClient {
+    fn default() -> Self {
         Self {
             client: Client::new(),
         }
     }
+}
 
+impl PriceClient {
     /// Request symbol price.
     pub fn price(&mut self, symbol: &str, datetime: DateTime<Utc>) -> Result<Decimal> {
         // Get UNIX timestamp in milliseconds.
@@ -56,10 +58,7 @@ impl PriceClient {
 
 /// Parse kline response body and extract close price.
 fn extract_price_from_body(body: &str, start_time_ms: i64) -> Result<Decimal> {
-    Ok(extract_price_from_payload(
-        serde_json::from_str(body)?,
-        start_time_ms,
-    )?)
+    extract_price_from_payload(serde_json::from_str(body)?, start_time_ms)
 }
 
 /// Extract close price from kline response containing at least one kline entry.
@@ -103,10 +102,10 @@ fn extract_price_from_payload(
         .as_i64()
         .ok_or(anyhow!("timestamp entry is not a number"))?;
     if returned_time_ms != start_time_ms {
-        let returned = NaiveDateTime::from_timestamp_millis(returned_time_ms)
-            .map(|dt| dt.format("%Y-%m-%d %H:%M:%S UTC").to_string());
-        let requested = NaiveDateTime::from_timestamp_millis(start_time_ms)
-            .map(|dt| dt.format("%Y-%m-%d %H:%M:%S UTC").to_string());
+        let returned =
+            NaiveDateTime::from_timestamp_millis(returned_time_ms).map(|dt| dt.into_human());
+        let requested =
+            NaiveDateTime::from_timestamp_millis(start_time_ms).map(|dt| dt.into_human());
 
         return match (returned, requested) {
             (Some(returned), Some(requested)) => Err(anyhow!(

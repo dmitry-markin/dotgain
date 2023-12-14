@@ -2,7 +2,10 @@ use anyhow::{anyhow, Context, Result};
 use chrono::{DateTime, Utc};
 use clap::Parser;
 use csv::Reader;
-use dotgain::{price::PriceClient, time::datetime_from_utc_string};
+use dotgain::{
+    price::PriceClient,
+    time::{IntoHuman, TryFromHuman},
+};
 use rust_decimal::Decimal;
 use std::{
     fs::File,
@@ -26,11 +29,11 @@ struct Args {
     convert: String,
 
     /// Start date & time.
-    #[arg(short, long, value_parser = datetime_from_utc_string)]
+    #[arg(short, long, value_parser = DateTime::<Utc>::try_from_human)]
     begin: Option<DateTime<Utc>>,
 
     /// End date & time. Not inclusive.
-    #[arg(short, long, value_parser = datetime_from_utc_string)]
+    #[arg(short, long, value_parser = DateTime::<Utc>::try_from_human)]
     end: Option<DateTime<Utc>>,
 
     /// Resulting report.
@@ -42,12 +45,12 @@ struct Args {
 }
 
 struct InputEntry {
-    datetime: String,
+    datetime: DateTime<Utc>,
     value: Decimal,
 }
 
 struct OutputEntry {
-    datetime: String,
+    datetime: DateTime<Utc>,
     value: Decimal,
     conversion: Decimal,
     fiat_gain: Decimal,
@@ -63,8 +66,8 @@ fn main() -> Result<()> {
     let args = Args::parse();
 
     let input = read_input(&args.input)?;
-    let data = filter_range(input, args.begin, args.end)?;
-    let report = process(data, &args.convert)?;
+    let selected = filter_range(input, args.begin, args.end);
+    let report = process(selected, &args.convert)?;
     let totals = calculate_totals(&report);
 
     write_output(report, totals, &args.convert, &args.output)?;
@@ -96,7 +99,7 @@ fn read_input(path: &Path) -> Result<Vec<InputEntry>> {
             return Err(anyhow!("not enough columns in a raw"));
         }
 
-        let datetime = record[date_column].to_string();
+        let datetime = DateTime::<Utc>::try_from_human(&record[date_column])?;
         let value_str = &record[value_column];
         let value = Decimal::from_str_exact(value_str)
             .with_context(|| format!("cannot convert {value_str} to number"))?;
@@ -111,30 +114,27 @@ fn filter_range(
     input: Vec<InputEntry>,
     begin: Option<DateTime<Utc>>,
     end: Option<DateTime<Utc>>,
-) -> Result<Vec<InputEntry>> {
-    let mut output = Vec::new();
-
-    for entry in input {
-        let datetime =
-            datetime_from_utc_string(&entry.datetime).context("invalid date in input data")?;
-        if let Some(begin) = begin {
-            if datetime < begin {
-                continue;
+) -> Vec<InputEntry> {
+    input
+        .into_iter()
+        .filter(|entry| {
+            if let Some(begin) = begin {
+                if entry.datetime < begin {
+                    return false;
+                }
             }
-        }
-        if let Some(end) = end {
-            if datetime >= end {
-                continue;
+            if let Some(end) = end {
+                if entry.datetime >= end {
+                    return false;
+                }
             }
-        }
-        output.push(entry);
-    }
-
-    Ok(output)
+            true
+        })
+        .collect()
 }
 
 fn process(input: Vec<InputEntry>, symbol: &str) -> Result<Vec<OutputEntry>> {
-    let mut client = PriceClient::new();
+    let mut client = PriceClient::default();
     let mut output = Vec::new();
 
     let total_lines = input.len();
@@ -142,14 +142,12 @@ fn process(input: Vec<InputEntry>, symbol: &str) -> Result<Vec<OutputEntry>> {
     for (i, entry) in input.into_iter().enumerate() {
         print_progress(i + 1, total_lines);
 
-        let datetime =
-            datetime_from_utc_string(&entry.datetime).context("invalid date in input data")?;
         let conversion = client
-            .price(symbol, datetime)
+            .price(symbol, entry.datetime)
             .with_context(|| format!("failed to fetch price for {}", entry.datetime))?;
 
         output.push(OutputEntry {
-            datetime: entry.datetime.clone(),
+            datetime: entry.datetime,
             value: entry.value,
             conversion,
             fiat_gain: entry.value * conversion,
@@ -164,7 +162,7 @@ fn print_progress(current: usize, total: usize) {
     let _ = io::stdout().flush();
 }
 
-fn calculate_totals(report: &Vec<OutputEntry>) -> TotalsEntry {
+fn calculate_totals(report: &[OutputEntry]) -> TotalsEntry {
     let total_value = report
         .iter()
         .fold(Decimal::ZERO, |acc, entry| acc + entry.value);
@@ -203,7 +201,7 @@ fn write_output(
         writeln!(
             &mut w,
             "{},{},{},{}",
-            entry.datetime,
+            entry.datetime.naive_utc().into_human(),
             entry.value.normalize(),
             entry.conversion.normalize(),
             entry.fiat_gain.normalize()

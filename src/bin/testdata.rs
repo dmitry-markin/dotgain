@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Result};
 use chrono::{Days, NaiveDate, NaiveTime};
 use clap::Parser;
-use dotgain::time::date_from_string;
+use dotgain::time::{IntoHuman, TryFromHuman};
 use rand::{
     distributions::{Distribution, Uniform},
     rngs::ThreadRng,
@@ -12,11 +12,11 @@ use rand::{
 #[command(version, about, long_about = None)]
 struct Args {
     /// Start date
-    #[arg(short, long, value_parser = date_from_string)]
+    #[arg(short, long, value_parser = NaiveDate::try_from_human)]
     begin: NaiveDate,
 
     /// End date (not inclusive)
-    #[arg(short, long, value_parser = date_from_string)]
+    #[arg(short, long, value_parser = NaiveDate::try_from_human)]
     end: NaiveDate,
 }
 
@@ -54,10 +54,7 @@ fn main() -> Result<()> {
 
     let mut date = args.begin;
     while date < args.end {
-        let datetime = date
-            .and_time(random_time.sample())
-            .format("%Y-%m-%d %H:%M:%S")
-            .to_string();
+        let datetime = date.and_time(random_time.sample()).into_human();
 
         // Print row.
         println!("{datetime},1");

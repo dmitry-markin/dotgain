@@ -1,7 +1,7 @@
 use anyhow::Result;
+use chrono::{DateTime, Utc};
 use clap::Parser;
-
-use dotgain::{price::PriceClient, time::datetime_from_utc_string};
+use dotgain::{price::PriceClient, time::TryFromHuman};
 
 /// Lookup historic coin price using Binance Public API.
 #[derive(Parser, Debug)]
@@ -19,8 +19,8 @@ struct Args {
 
 fn main() -> Result<()> {
     let args = Args::parse();
-    let mut client = PriceClient::new();
-    let datetime = datetime_from_utc_string(&args.date)?;
+    let mut client = PriceClient::default();
+    let datetime = DateTime::<Utc>::try_from_human(&args.date)?;
     let price = client.price(&args.convert, datetime)?;
 
     println!("{price}");

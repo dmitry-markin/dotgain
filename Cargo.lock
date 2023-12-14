@@ -341,7 +341,6 @@ dependencies = [
  "rand",
  "reqwest",
  "rust_decimal",
- "serde",
  "serde_json",
 ]
 
