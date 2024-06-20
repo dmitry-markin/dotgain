@@ -15,11 +15,11 @@ use std::{
 
 const DATE_COLUMN: &str = "Date";
 const VALUE_COLUMN: &str = "Value";
-const FIAT_GAIN_COLUMN: &str = "Fiat gain";
+const FIAT_INCOME_COLUMN: &str = "Fiat income";
 const TOTAL_ROW: &str = "TOTAL";
 const AVG_PRICE_MIN_DECIMALS: u32 = 8;
 
-/// Create Polkadot staking tax report assuming every reward capital gain to be equal
+/// Create Polkadot staking tax report assuming every reward income to be equal
 /// the fiat value at the time of reward.
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -53,13 +53,13 @@ struct OutputEntry {
     datetime: DateTime<Utc>,
     value: Decimal,
     conversion: Decimal,
-    fiat_gain: Decimal,
+    fiat_income: Decimal,
 }
 
 struct TotalsEntry {
     total_value: Decimal,
     avg_conversion: Decimal,
-    total_fiat_gain: Decimal,
+    total_fiat_income: Decimal,
 }
 
 fn main() -> Result<()> {
@@ -150,7 +150,7 @@ fn process(input: Vec<InputEntry>, symbol: &str) -> Result<Vec<OutputEntry>> {
             datetime: entry.datetime,
             value: entry.value,
             conversion,
-            fiat_gain: entry.value * conversion,
+            fiat_income: entry.value * conversion,
         });
     }
 
@@ -166,11 +166,11 @@ fn calculate_totals(report: &[OutputEntry]) -> TotalsEntry {
     let total_value = report
         .iter()
         .fold(Decimal::ZERO, |acc, entry| acc + entry.value);
-    let total_fiat_gain = report
+    let total_fiat_income = report
         .iter()
-        .fold(Decimal::ZERO, |acc, entry| acc + entry.fiat_gain);
+        .fold(Decimal::ZERO, |acc, entry| acc + entry.fiat_income);
     let avg_conversion = if !total_value.is_zero() {
-        total_fiat_gain / total_value
+        total_fiat_income / total_value
     } else {
         Decimal::ZERO
     };
@@ -178,7 +178,7 @@ fn calculate_totals(report: &[OutputEntry]) -> TotalsEntry {
     TotalsEntry {
         total_value,
         avg_conversion,
-        total_fiat_gain,
+        total_fiat_income,
     }
 }
 
@@ -193,7 +193,7 @@ fn write_output(
     // Write headers.
     writeln!(
         &mut w,
-        "{DATE_COLUMN},{VALUE_COLUMN},{symbol},{FIAT_GAIN_COLUMN}"
+        "{DATE_COLUMN},{VALUE_COLUMN},{symbol},{FIAT_INCOME_COLUMN}"
     )?;
 
     // Write report.
@@ -204,22 +204,22 @@ fn write_output(
             entry.datetime.naive_utc().into_human(),
             entry.value.normalize(),
             entry.conversion.normalize(),
-            entry.fiat_gain.normalize()
+            entry.fiat_income.normalize()
         )?;
     }
 
     // Write totals.
     let total_value = totals.total_value.normalize();
-    let total_fiat_gain = totals.total_fiat_gain.normalize();
+    let total_fiat_income = totals.total_fiat_income.normalize();
     // Decimal places estimation below is not quite correct, because we count only
     // fractional decimal places.
     // For this reason we always use at least `AVG_PRICE_MIN_DECIMALS` decimal places.
-    let max_decimals = std::cmp::max(total_value.scale(), total_fiat_gain.scale());
+    let max_decimals = std::cmp::max(total_value.scale(), total_fiat_income.scale());
     let max_decimals = std::cmp::max(max_decimals, AVG_PRICE_MIN_DECIMALS);
     let avg_conversion = totals.avg_conversion.round_dp(max_decimals).normalize();
     writeln!(
         &mut w,
-        "{TOTAL_ROW},{total_value},{avg_conversion},{total_fiat_gain}"
+        "{TOTAL_ROW},{total_value},{avg_conversion},{total_fiat_income}"
     )?;
 
     Ok(())

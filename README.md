@@ -1,6 +1,6 @@
 # dotgain
 
-Polkadot staking tax report generator. Generates a staking capital income report from a [Subscan](https://www.subscan.io/) CSV using the [Binance Public API](https://binance-docs.github.io/apidocs/spot/en/#kline-candlestick-data).
+Polkadot staking tax report generator. Generates a staking income report from a [Subscan](https://www.subscan.io/) CSV using the [Binance Public API](https://binance-docs.github.io/apidocs/spot/en/#kline-candlestick-data).
 
 ## Usage
 
@@ -14,7 +14,7 @@ Create a report in USDT for 2022:
 dotgain --convert DOTUSDT --begin 2022-01-01 --end 2023-01-01 -o output.csv subscan_report.csv
 ```
 
-See `dotgain -h` for the usage description.
+See `dotgain -h` for the complete usage description.
 
 Note that all date & time data is expected to be in UTC.
 
@@ -37,7 +37,7 @@ Note that all date & time data is expected to be in UTC.
 
 ## Example output
 
-| Date                | Value   | DOTEUR      | Fiat gain    |
+| Date                | Value   | DOTEUR      | Fiat income  |
 |---------------------|---------|-------------|--------------|
 | 2022-01-01 01:57:03 | 0.532   | 23.93       | 12.73076     |
 | 2022-01-02 01:56:56 | 0.5214  | 24.79       | 12.925506    |
